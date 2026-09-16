@@ -3,447 +3,309 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sistem Optometri & AR Virtual Try-On Cermin Mata</title>
+  <title>Cermin Mata AR Try-On</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+  <!-- Enjin Face Detection Ringan -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
   <style>
-    .mirror-canvas {
+    .mirror-flip {
       transform: scaleX(-1);
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen py-6 px-4">
-  <div class="max-w-6xl mx-auto">
+<body class="bg-slate-950 text-white min-h-screen py-6 px-4">
+  <div class="max-w-4xl mx-auto">
+    
     <header class="text-center mb-6">
-      <div class="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-2xl mb-2 shadow-lg shadow-blue-500/30">
-        <i class="fa-solid fa-glasses text-xl text-white"></i>
-      </div>
-      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">AR Virtual Glasses Try-On</h1>
-      <p class="text-slate-400 text-xs sm:text-sm mt-1">Imbas wajah secara langsung & simpan preskripsi pesakit ke Google Sheet.</p>
+      <h1 class="text-2xl sm:text-3xl font-bold text-blue-400">👓 Cermin Mata AR & Rekod Preskripsi</h1>
+      <p class="text-slate-400 text-xs mt-1">Pandang skrin, pilih bingkai di bawah, dan simpan rekod.</p>
     </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <!-- CERMIN AR -->
-      <div class="lg:col-span-7 flex flex-col items-center">
-        <div class="w-full bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-800 shadow-2xl">
-          <div class="flex items-center justify-between mb-3 px-2">
-            <div class="flex items-center gap-2">
-              <span class="inline-block w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
-              <span class="text-xs sm:text-sm font-semibold text-slate-200">Live HD Mirror</span>
-            </div>
-            <div id="trackingStatus" class="text-[11px] font-mono bg-slate-800 text-amber-300 px-3 py-1 rounded-full border border-slate-700">
-              Memuatkan Kamera...
-            </div>
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+      
+      <!-- Cermin AR -->
+      <div class="md:col-span-7 flex flex-col items-center">
+        <div class="w-full bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl">
+          
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span> Kamera Aktif
+            </span>
+            <span id="statusTxt" class="text-[11px] bg-slate-800 text-amber-300 px-3 py-1 rounded-full">
+              Menghidupkan Pengesan Wajah...
+            </span>
           </div>
 
-          <div class="relative w-full aspect-[4/3] bg-black rounded-2xl overflow-hidden shadow-inner flex items-center justify-center border border-slate-800">
-            <video id="webcam" class="hidden" playsinline></video>
-            <canvas id="arCanvas" class="w-full h-full object-cover mirror-canvas"></canvas>
-            <div id="flashOverlay" class="absolute inset-0 bg-white opacity-0 pointer-events-none transition-opacity duration-200"></div>
-            <div id="camLoader" class="absolute flex flex-col items-center gap-2">
-              <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i>
-              <span class="text-xs text-slate-400">Menghidupkan AR...</span>
-            </div>
+          <!-- Video & Canvas Penindih -->
+          <div class="relative w-full aspect-[4/3] bg-black rounded-2xl overflow-hidden flex items-center justify-center">
+            <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover mirror-flip"></video>
+            <canvas id="arCanvas" class="absolute inset-0 w-full h-full object-cover mirror-flip pointer-events-none"></canvas>
           </div>
 
-          <!-- Pilihan Bingkai -->
+          <!-- Butang Tukar Cermin Mata -->
           <div class="mt-4">
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-              Pilih Bingkai Cermin Mata:
-            </label>
-            <div class="grid grid-cols-4 gap-2">
-              <button type="button" onclick="selectGlasses('aviator')" id="btn-aviator" class="glass-btn border-2 border-blue-500 bg-blue-600/20 text-white rounded-xl p-2 text-xs flex flex-col items-center gap-1 transition">
-                <i class="fa-solid fa-glasses text-lg text-amber-400"></i>
-                <span class="text-[10px] font-semibold truncate">Aviator Gold</span>
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Pilih Bingkai:</span>
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" onclick="pilihFrame('aviator')" id="btn-aviator" class="border-2 border-blue-500 bg-blue-600/30 p-2.5 rounded-xl text-xs font-bold transition">
+                Aviator Gold
               </button>
-              <button type="button" onclick="selectGlasses('round')" id="btn-round" class="glass-btn border border-slate-700 bg-slate-800 text-slate-300 rounded-xl p-2 text-xs flex flex-col items-center gap-1 transition hover:bg-slate-700">
-                <i class="fa-regular fa-circle-dot text-lg text-slate-200"></i>
-                <span class="text-[10px] font-semibold truncate">Round Black</span>
+              <button type="button" onclick="pilihFrame('round')" id="btn-round" class="border border-slate-700 bg-slate-800 p-2.5 rounded-xl text-xs font-bold transition">
+                Classic Round
               </button>
-              <button type="button" onclick="selectGlasses('square')" id="btn-square" class="glass-btn border border-slate-700 bg-slate-800 text-slate-300 rounded-xl p-2 text-xs flex flex-col items-center gap-1 transition hover:bg-slate-700">
-                <i class="fa-solid fa-square text-lg text-slate-400"></i>
-                <span class="text-[10px] font-semibold truncate">Square Bold</span>
-              </button>
-              <button type="button" onclick="selectGlasses('cateye')" id="btn-cateye" class="glass-btn border border-slate-700 bg-slate-800 text-slate-300 rounded-xl p-2 text-xs flex flex-col items-center gap-1 transition hover:bg-slate-700">
-                <i class="fa-solid fa-gem text-lg text-rose-400"></i>
-                <span class="text-[10px] font-semibold truncate">Cat-Eye Ruby</span>
+              <button type="button" onclick="pilihFrame('square')" id="btn-square" class="border border-slate-700 bg-slate-800 p-2.5 rounded-xl text-xs font-bold transition">
+                Square Black
               </button>
             </div>
           </div>
 
-          <div class="mt-4 flex gap-2">
-            <button type="button" onclick="snapPhoto()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm transition shadow-lg shadow-emerald-600/20">
-              <i class="fa-solid fa-camera"></i>
-              <span>Tangkap Gambar Wajah</span>
-            </button>
-            <button type="button" onclick="resetSnap()" id="btnResetSnap" class="hidden bg-slate-800 hover:bg-slate-700 text-slate-200 py-2.5 px-4 rounded-xl border border-slate-700 text-sm transition">
-              <i class="fa-solid fa-rotate-left"></i>
-            </button>
-          </div>
+          <!-- Ambil Gambar -->
+          <button type="button" onclick="ambilFoto()" class="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-camera"></i> Tangkap Gambar Bersama Cermin Mata
+          </button>
 
-          <div id="snapshotPreviewCard" class="hidden mt-3 bg-slate-950 rounded-xl p-2.5 border border-emerald-500/40 flex items-center gap-3">
-            <img id="previewImg" class="w-14 h-14 object-cover rounded-lg border border-slate-700" alt="Preview" />
-            <div class="text-[11px]">
-              <div class="text-emerald-400 font-bold flex items-center gap-1">
-                <i class="fa-solid fa-check"></i> Foto dilampirkan
-              </div>
-              <div class="text-slate-400">Gambar berserta bingkai ini akan disimpan terus ke Google Sheet & Drive.</div>
+          <!-- Snapshot Preview -->
+          <div id="previewCard" class="hidden mt-3 p-2 bg-slate-800 rounded-xl flex items-center gap-3 border border-emerald-500/50">
+            <img id="imgSnapshot" class="w-14 h-14 object-cover rounded-lg" alt="Snapshot" />
+            <div class="text-xs text-emerald-400 font-semibold">
+              Foto berjaya diambil! Sedia untuk dihantar ke Google Sheet.
             </div>
           </div>
+
         </div>
       </div>
 
-      <!-- BORANG PREKRIPSI -->
-      <div class="lg:col-span-5">
-        <div class="bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-800 shadow-2xl">
-          <h2 class="text-base sm:text-lg font-bold text-white border-b border-slate-800 pb-3 flex items-center gap-2">
-            <i class="fa-solid fa-clipboard-user text-blue-500"></i> Borang Rekod Pesakit
+      <!-- Borang Google Sheet -->
+      <div class="md:col-span-5">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl">
+          <h2 class="text-base font-bold text-white border-b border-slate-800 pb-2 mb-4">
+            Maklumat Pesakit & Power Mata
           </h2>
 
-          <div id="alertBox" class="hidden mt-3 p-3 rounded-xl text-xs font-medium"></div>
+          <div id="msgBox" class="hidden mb-3 p-3 rounded-xl text-xs font-semibold"></div>
 
-          <form id="recordForm" class="mt-4 space-y-3" onsubmit="submitAll(event)">
+          <form id="optomForm" onsubmit="hantarGoogleSheet(event)" class="space-y-3">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Nama Pesakit *</label>
-              <input type="text" name="nama" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="cth: Siti Sarah" />
+              <label class="block text-xs text-slate-400 mb-1">Nama Penuh *</label>
+              <input type="text" name="nama" required placeholder="Ali Bin Abu" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">No. Telefon *</label>
-                <input type="tel" name="telefon" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="0123456789" />
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Tarikh Periksa *</label>
-                <input type="date" name="tarikhPeriksa" id="tarikhPeriksa" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
-              </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">No. Telefon *</label>
+              <input type="tel" name="telefon" required placeholder="0123456789" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
             </div>
 
-            <div class="pt-1">
-              <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Kuasa Mata (Power)</label>
-              <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2.5 text-xs">
-                <div>
-                  <div class="text-blue-400 font-semibold mb-1 text-[11px]">Kanan (OD / Right Eye)</div>
-                  <div class="grid grid-cols-3 gap-1.5">
-                    <input type="text" name="sphR" placeholder="SPH -2.00" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-center text-white text-xs" />
-                    <input type="text" name="cylR" placeholder="CYL -0.50" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-center text-white text-xs" />
-                    <input type="number" name="axisR" placeholder="AXIS 180" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-center text-white text-xs" />
-                  </div>
-                </div>
-                <div>
-                  <div class="text-blue-400 font-semibold mb-1 text-[11px]">Kiri (OS / Left Eye)</div>
-                  <div class="grid grid-cols-3 gap-1.5">
-                    <input type="text" name="sphL" placeholder="SPH -2.25" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-center text-white text-xs" />
-                    <input type="text" name="cylL" placeholder="CYL -0.75" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-center text-white text-xs" />
-                    <input type="number" name="axisL" placeholder="AXIS 175" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-center text-white text-xs" />
-                  </div>
-                </div>
-                <input type="text" name="addPower" placeholder="ADD / Reading Power (+1.50)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white text-xs" />
+            <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs space-y-2">
+              <span class="text-blue-400 font-bold block">Power Mata:</span>
+              <div class="grid grid-cols-2 gap-2">
+                <input type="text" name="sphR" placeholder="SPH Kanan (-2.00)" class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-center" />
+                <input type="text" name="sphL" placeholder="SPH Kiri (-2.25)" class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-center" />
               </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Jenis Kanta</label>
-                <select name="jenisKanta" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
-                  <option value="Single Vision">Single Vision</option>
-                  <option value="Blue Control">Blue Control</option>
-                  <option value="Photochromic">Photochromic</option>
-                  <option value="Progressive">Progressive</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Bingkai Pilihan</label>
-                <input type="text" id="selectedFrameInput" name="jenisBingkai" readonly class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-emerald-400 font-bold focus:outline-none" value="Aviator Gold" />
+              <div class="grid grid-cols-2 gap-2">
+                <input type="text" name="cylR" placeholder="CYL Kanan (-0.50)" class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-center" />
+                <input type="text" name="cylL" placeholder="CYL Kiri (-0.75)" class="bg-slate-900 border border-slate-700 rounded-lg p-2 text-center" />
               </div>
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Catatan Kesihatan Mata</label>
-              <textarea name="catatanKesihatan" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500" placeholder="cth: Silau memandu malam, mata kering..."></textarea>
+              <label class="block text-xs text-slate-400 mb-1">Bingkai Pilihan</label>
+              <input type="text" id="inputBingkai" name="jenisBingkai" readonly value="Aviator Gold" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-emerald-400 font-bold" />
             </div>
 
-            <div class="pt-1">
-              <button type="submit" id="btnSubmit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2 text-sm">
-                <span>Simpan Rekod ke Google Sheet</span>
-                <i class="fa-solid fa-cloud-arrow-up"></i>
-              </button>
-            </div>
+            <button type="submit" id="btnHantar" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold text-sm transition mt-3">
+              Simpan ke Google Sheet
+            </button>
           </form>
         </div>
       </div>
+
     </div>
   </div>
 
   <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwddy629DX28gP_3k5V11wcg_qmJ48cJrgaf7WczZ8TEjbmzXjIfWpXzbsdWgkeEZ8e/exec";
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwddy629DX28gP_3k5V11wcg_qmJ48cJrgaf7WczZ8TEjbmzXjIfWpXzbsdWgkeEZ8e/exec";
 
-    document.getElementById('tarikhPeriksa').valueAsDate = new Date();
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('arCanvas');
+    const ctx = canvas.getContext('2d');
+    const statusTxt = document.getElementById('statusTxt');
 
-    const videoElement = document.getElementById('webcam');
-    const canvasElement = document.getElementById('arCanvas');
-    const canvasCtx = canvasElement.getContext('2d');
-    const trackingStatus = document.getElementById('trackingStatus');
-    const camLoader = document.getElementById('camLoader');
+    let detector = null;
+    let selectedFrame = 'aviator';
+    let snapBase64 = null;
 
-    let currentGlasses = 'aviator';
-    let capturedBase64 = null;
-
-    // Bingkai Bertekstur Realistik (Kilauan Kanta + Bayang 3D)
-    const realisticSVGs = {
-      aviator: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" width="600" height="240">
-        <defs>
-          <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#fff0a5"/>
-            <stop offset="35%" stop-color="#d4af37"/>
-            <stop offset="70%" stop-color="#aa8012"/>
-            <stop offset="100%" stop-color="#ffd875"/>
-          </linearGradient>
-          <linearGradient id="glare" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="rgba(255,255,255,0.45)"/>
-            <stop offset="30%" stop-color="rgba(255,255,255,0.08)"/>
-            <stop offset="100%" stop-color="rgba(15,23,42,0.55)"/>
-          </linearGradient>
-        </defs>
-        <!-- Jambatan Hidung Dwi-Palang -->
-        <path d="M 255,100 Q 300,82 345,100" stroke="url(#gold)" stroke-width="7" fill="none" stroke-linecap="round"/>
-        <path d="M 262,118 Q 300,108 338,118" stroke="url(#gold)" stroke-width="4.5" fill="none"/>
-        <!-- Kanta Kiri & Kanan (Drop Teardrop) -->
-        <path d="M 95,95 C 105,45 240,45 250,95 C 255,145 220,205 160,205 C 100,205 85,145 95,95 Z" fill="url(#glare)" stroke="url(#gold)" stroke-width="8"/>
-        <path d="M 505,95 C 495,45 360,45 350,95 C 345,145 380,205 440,205 C 500,205 515,145 505,95 Z" fill="url(#glare)" stroke="url(#gold)" stroke-width="8"/>
-        <!-- Pantulan Cahaya Atas Kanta -->
-        <path d="M 125,75 Q 165,65 210,75" stroke="rgba(255,255,255,0.6)" stroke-width="4" fill="none" stroke-linecap="round"/>
-        <path d="M 390,75 Q 435,65 475,75" stroke="rgba(255,255,255,0.6)" stroke-width="4" fill="none" stroke-linecap="round"/>
-        <!-- Kaki Bingkai Sudut -->
-        <path d="M 95,95 L 35,90" stroke="url(#gold)" stroke-width="7" stroke-linecap="round"/>
-        <path d="M 505,95 L 565,90" stroke="url(#gold)" stroke-width="7" stroke-linecap="round"/>
+    // Grafik Cermin Mata
+    const svgs = {
+      aviator: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" width="500" height="200">
+        <path d="M 210,85 Q 250,70 290,85" stroke="#eab308" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <path d="M 215,102 Q 250,92 285,102" stroke="#eab308" stroke-width="5" fill="none"/>
+        <path d="M 75,80 C 85,35 195,35 205,80 C 210,130 180,180 135,180 C 90,180 70,130 75,80 Z" fill="rgba(15,23,42,0.4)" stroke="#eab308" stroke-width="10"/>
+        <path d="M 425,80 C 415,35 305,35 295,80 C 290,130 320,180 365,180 C 410,180 430,130 425,80 Z" fill="rgba(15,23,42,0.4)" stroke="#eab308" stroke-width="10"/>
+        <path d="M 75,80 L 25,75" stroke="#eab308" stroke-width="8" stroke-linecap="round"/>
+        <path d="M 425,80 L 475,75" stroke="#eab308" stroke-width="8" stroke-linecap="round"/>
       </svg>`,
-
-      round: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" width="600" height="240">
-        <defs>
-          <linearGradient id="silver" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#f1f5f9"/>
-            <stop offset="50%" stop-color="#334155"/>
-            <stop offset="100%" stop-color="#0f172a"/>
-          </linearGradient>
-          <linearGradient id="clearGlass" x1="0%" y1="0%" x2="80%" y2="100%">
-            <stop offset="0%" stop-color="rgba(255,255,255,0.4)"/>
-            <stop offset="40%" stop-color="rgba(148,163,184,0.1)"/>
-            <stop offset="100%" stop-color="rgba(15,23,42,0.2)"/>
-          </linearGradient>
-        </defs>
-        <path d="M 250,118 Q 300,98 350,118" stroke="url(#silver)" stroke-width="8" fill="none" stroke-linecap="round"/>
-        <circle cx="170" cy="120" r="80" fill="url(#clearGlass)" stroke="url(#silver)" stroke-width="12"/>
-        <circle cx="430" cy="120" r="80" fill="url(#clearGlass)" stroke="url(#silver)" stroke-width="12"/>
-        <ellipse cx="145" cy="95" rx="35" ry="14" fill="rgba(255,255,255,0.35)" transform="rotate(-30 145 95)"/>
-        <ellipse cx="405" cy="95" rx="35" ry="14" fill="rgba(255,255,255,0.35)" transform="rotate(-30 405 95)"/>
-        <path d="M 90,120 L 35,115" stroke="url(#silver)" stroke-width="8" stroke-linecap="round"/>
-        <path d="M 510,120 L 565,115" stroke="url(#silver)" stroke-width="8" stroke-linecap="round"/>
+      round: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" width="500" height="200">
+        <path d="M 210,95 Q 250,80 290,95" stroke="#38bdf8" stroke-width="9" fill="none" stroke-linecap="round"/>
+        <circle cx="140" cy="100" r="65" fill="rgba(56,189,248,0.2)" stroke="#0f172a" stroke-width="14"/>
+        <circle cx="360" cy="100" r="65" fill="rgba(56,189,248,0.2)" stroke="#0f172a" stroke-width="14"/>
+        <path d="M 75,100 L 25,95" stroke="#0f172a" stroke-width="10" stroke-linecap="round"/>
+        <path d="M 425,100 L 475,95" stroke="#0f172a" stroke-width="10" stroke-linecap="round"/>
       </svg>`,
-
-      square: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" width="600" height="240">
-        <defs>
-          <linearGradient id="blackGloss" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#334155"/>
-            <stop offset="50%" stop-color="#0f172a"/>
-            <stop offset="100%" stop-color="#020617"/>
-          </linearGradient>
-          <linearGradient id="sunglass" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
-            <stop offset="25%" stop-color="rgba(15,23,42,0.45)"/>
-            <stop offset="100%" stop-color="rgba(2,6,23,0.7)"/>
-          </linearGradient>
-        </defs>
-        <path d="M 260,110 L 340,110" stroke="url(#blackGloss)" stroke-width="14" stroke-linecap="round"/>
-        <rect x="90" y="60" width="170" height="115" rx="24" fill="url(#sunglass)" stroke="url(#blackGloss)" stroke-width="16"/>
-        <rect x="340" y="60" width="170" height="115" rx="24" fill="url(#sunglass)" stroke="url(#blackGloss)" stroke-width="16"/>
-        <circle cx="105" cy="75" r="3" fill="#cbd5e1"/>
-        <circle cx="495" cy="75" r="3" fill="#cbd5e1"/>
-        <path d="M 90,80 L 35,75" stroke="url(#blackGloss)" stroke-width="12" stroke-linecap="round"/>
-        <path d="M 510,80 L 565,75" stroke="url(#blackGloss)" stroke-width="12" stroke-linecap="round"/>
-      </svg>`,
-
-      cateye: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" width="600" height="240">
-        <defs>
-          <linearGradient id="ruby" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#fb7185"/>
-            <stop offset="50%" stop-color="#be123c"/>
-            <stop offset="100%" stop-color="#4c0519"/>
-          </linearGradient>
-        </defs>
-        <path d="M 260,120 Q 300,105 340,120" stroke="url(#ruby)" stroke-width="9" fill="none" stroke-linecap="round"/>
-        <path d="M 75,70 Q 185,62 255,115 Q 220,195 160,190 Q 80,180 75,70 Z" fill="rgba(225,29,72,0.25)" stroke="url(#ruby)" stroke-width="14"/>
-        <path d="M 525,70 Q 415,62 345,115 Q 380,195 440,190 Q 520,180 525,70 Z" fill="rgba(225,29,72,0.25)" stroke="url(#ruby)" stroke-width="14"/>
-        <circle cx="85" cy="78" r="4" fill="#fbbf24"/>
-        <circle cx="515" cy="78" r="4" fill="#fbbf24"/>
-        <path d="M 75,80 L 35,90" stroke="url(#ruby)" stroke-width="10" stroke-linecap="round"/>
-        <path d="M 525,80 L 565,90" stroke="url(#ruby)" stroke-width="10" stroke-linecap="round"/>
+      square: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" width="500" height="200">
+        <path d="M 215,90 L 285,90" stroke="#0f172a" stroke-width="14" stroke-linecap="round"/>
+        <rect x="75" y="50" width="140" height="95" rx="18" fill="rgba(15,23,42,0.45)" stroke="#020617" stroke-width="16"/>
+        <rect x="285" y="50" width="140" height="95" rx="18" fill="rgba(15,23,42,0.45)" stroke="#020617" stroke-width="16"/>
+        <path d="M 75,65 L 25,60" stroke="#020617" stroke-width="12" stroke-linecap="round"/>
+        <path d="M 425,65 L 475,60" stroke="#020617" stroke-width="12" stroke-linecap="round"/>
       </svg>`
     };
 
-    const loadedGlasses = {};
-    for (const [key, svgStr] of Object.entries(realisticSVGs)) {
+    const frameImages = {};
+    for (const [k, v] of Object.entries(svgs)) {
       const img = new Image();
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
-      loadedGlasses[key] = img;
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(v);
+      frameImages[k] = img;
     }
 
-    const frameNames = {
-      aviator: "Aviator Gold",
-      round: "Round Black",
-      square: "Square Bold",
-      cateye: "Cat-Eye Ruby"
-    };
-
-    function selectGlasses(type) {
-      currentGlasses = type;
-      document.querySelectorAll('.glass-btn').forEach(btn => {
-        btn.classList.remove('border-blue-500', 'bg-blue-600/20');
-        btn.classList.add('border-slate-700', 'bg-slate-800');
+    function pilihFrame(type) {
+      selectedFrame = type;
+      ['aviator', 'round', 'square'].forEach(id => {
+        const b = document.getElementById('btn-' + id);
+        b.className = (id === type) 
+          ? "border-2 border-blue-500 bg-blue-600/30 p-2.5 rounded-xl text-xs font-bold transition"
+          : "border border-slate-700 bg-slate-800 p-2.5 rounded-xl text-xs font-bold transition";
       });
-      const activeBtn = document.getElementById('btn-' + type);
-      if (activeBtn) {
-        activeBtn.classList.add('border-blue-500', 'bg-blue-600/20');
-        activeBtn.classList.remove('border-slate-700', 'bg-slate-800');
+      const names = { aviator: "Aviator Gold", round: "Classic Round", square: "Square Black" };
+      document.getElementById('inputBingkai').value = names[type];
+    }
+
+    // 1. Mulakan Kamera Natif
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        video.srcObject = stream;
+        await new Promise(res => video.onloadedmetadata = res);
+        video.play();
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        statusTxt.textContent = "Kamera Aktif. Mengimbas Muka...";
+        loadModel();
+      } catch (err) {
+        statusTxt.textContent = "Kamera Disekat!";
+        alert("Sila benarkan akses kamera pelayar: " + err.message);
       }
-      document.getElementById('selectedFrameInput').value = frameNames[type];
     }
 
-    const faceMesh = new FaceMesh({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-    });
-
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-
-    faceMesh.onResults(onFaceResults);
-
-    function onFaceResults(results) {
-      camLoader.style.display = 'none';
-      canvasElement.width = videoElement.videoWidth || 640;
-      canvasElement.height = videoElement.videoHeight || 480;
-
-      canvasCtx.save();
-      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
-      if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        trackingStatus.textContent = "Wajah Dikesan (Cermin Mata Aktif)";
-        trackingStatus.className = "text-[11px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-3 py-1 rounded-full";
-
-        const landmarks = results.multiFaceLandmarks[0];
-        const leftOuter = landmarks[33];
-        const rightOuter = landmarks[263];
-        const noseBridge = landmarks[168];
-
-        const lx = leftOuter.x * canvasElement.width;
-        const ly = leftOuter.y * canvasElement.height;
-        const rx = rightOuter.x * canvasElement.width;
-        const ry = rightOuter.y * canvasElement.height;
-        const nx = noseBridge.x * canvasElement.width;
-        const ny = noseBridge.y * canvasElement.height;
-
-        const dx = rx - lx;
-        const dy = ry - ly;
-        const eyeDist = Math.sqrt(dx * dx + dy * dy);
-        const angle = Math.atan2(dy, dx);
-
-        const glassesWidth = eyeDist * 2.35;
-        const glassesHeight = glassesWidth * 0.4;
-
-        canvasCtx.save();
-        canvasCtx.translate(nx, ny + (glassesHeight * 0.05));
-        canvasCtx.rotate(angle);
-
-        const img = loadedGlasses[currentGlasses];
-        if (img && img.complete) {
-          canvasCtx.drawImage(img, -glassesWidth / 2, -glassesHeight / 2, glassesWidth, glassesHeight);
-        }
-        canvasCtx.restore();
-
-      } else {
-        trackingStatus.textContent = "Cari Wajah Anda...";
-        trackingStatus.className = "text-[11px] font-mono bg-slate-800 text-amber-300 px-3 py-1 rounded-full";
+    // 2. Muat Enjin Pengesan Wajah
+    async function loadModel() {
+      try {
+        const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+        const detectorConfig = {
+          runtime: 'tfjs',
+          refineLandmarks: false
+        };
+        detector = await faceLandmarksDetection.createDetector(model, detectorConfig);
+        statusTxt.textContent = "AR Sedia Digunakan!";
+        statusTxt.className = "text-[11px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-3 py-1 rounded-full";
+        renderLoop();
+      } catch (e) {
+        statusTxt.textContent = "Ralat AR: " + e.message;
       }
-
-      canvasCtx.restore();
     }
 
-    const camera = new Camera(videoElement, {
-      onFrame: async () => {
-        await faceMesh.send({ image: videoElement });
-      },
-      width: 640,
-      height: 480
-    });
-    camera.start().catch(err => {
-      trackingStatus.textContent = "Kamera Disekat";
-      trackingStatus.className = "text-[11px] font-mono bg-rose-950 text-rose-300 px-3 py-1 rounded-full";
-    });
+    // 3. Render Loop Cermin Mata
+    async function renderLoop() {
+      if (detector && video.readyState >= 2) {
+        try {
+          const faces = await detector.estimateFaces(video, { flipHorizontal: false });
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    function snapPhoto() {
-      const flash = document.getElementById('flashOverlay');
-      flash.classList.remove('opacity-0');
-      flash.classList.add('opacity-80');
-      setTimeout(() => {
-        flash.classList.remove('opacity-80');
-        flash.classList.add('opacity-0');
-      }, 150);
+          if (faces.length > 0) {
+            const keypoints = faces[0].keypoints;
+            
+            // Mata Kiri luaran (33), Mata Kanan luaran (263), Batang Hidung (168)
+            const leftEye = keypoints[33] || keypoints[130];
+            const rightEye = keypoints[263] || keypoints[359];
+            const nose = keypoints[168] || keypoints[6];
 
-      const offscreen = document.createElement('canvas');
-      offscreen.width = canvasElement.width;
-      offscreen.height = canvasElement.height;
-      const ctx = offscreen.getContext('2d');
-      ctx.translate(offscreen.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(canvasElement, 0, 0);
+            if (leftEye && rightEye && nose) {
+              const dx = rightEye.x - leftEye.x;
+              const dy = rightEye.y - leftEye.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              const angle = Math.atan2(dy, dx);
 
-      capturedBase64 = offscreen.toDataURL('image/png', 0.85);
-      document.getElementById('previewImg').src = capturedBase64;
-      document.getElementById('snapshotPreviewCard').classList.remove('hidden');
-      document.getElementById('btnResetSnap').classList.remove('hidden');
+              const frameWidth = distance * 2.15;
+              const frameHeight = frameWidth * 0.4;
+
+              ctx.save();
+              ctx.translate(nose.x, nose.y + 5);
+              ctx.rotate(angle);
+
+              const img = frameImages[selectedFrame];
+              if (img && img.complete) {
+                ctx.drawImage(img, -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight);
+              }
+              ctx.restore();
+            }
+          }
+        } catch (err) {}
+      }
+      requestAnimationFrame(renderLoop);
     }
 
-    function resetSnap() {
-      capturedBase64 = null;
-      document.getElementById('snapshotPreviewCard').classList.add('hidden');
-      document.getElementById('btnResetSnap').classList.add('hidden');
+    // 4. Tangkap Gambar
+    function ambilFoto() {
+      const snapCanvas = document.createElement('canvas');
+      snapCanvas.width = canvas.width;
+      snapCanvas.height = canvas.height;
+      const sCtx = snapCanvas.getContext('2d');
+
+      // Lukis video dan cermin mata serentak
+      sCtx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
+      sCtx.drawImage(canvas, 0, 0, snapCanvas.width, snapCanvas.height);
+
+      snapBase64 = snapCanvas.toDataURL('image/png', 0.85);
+      document.getElementById('imgSnapshot').src = snapBase64;
+      document.getElementById('previewCard').classList.remove('hidden');
     }
 
-    function submitAll(e) {
+    // 5. Hantar ke Google Apps Script
+    function hantarGoogleSheet(e) {
       e.preventDefault();
-      const btn = document.getElementById('btnSubmit');
-      const alertBox = document.getElementById('alertBox');
-      const form = document.getElementById('recordForm');
+      const form = document.getElementById('optomForm');
+      const btn = document.getElementById('btnHantar');
+      const msgBox = document.getElementById('msgBox');
 
       btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Menyimpan ke Google Sheet...`;
-      alertBox.className = "hidden";
+      btn.textContent = "Menyimpan ke Google Sheet...";
+      msgBox.className = "hidden";
 
       const payload = {
         nama: form.nama.value,
         telefon: form.telefon.value,
-        tarikhPeriksa: form.tarikhPeriksa.value,
+        tarikhPeriksa: new Date().toISOString().split('T')[0],
         sphR: form.sphR.value,
-        cylR: form.cylR.value,
-        axisR: form.axisR.value,
         sphL: form.sphL.value,
+        cylR: form.cylR.value,
         cylL: form.cylL.value,
-        axisL: form.axisL.value,
-        addPower: form.addPower.value,
-        jenisKanta: form.jenisKanta.value,
+        axisR: "0",
+        axisL: "0",
+        addPower: "-",
+        jenisKanta: "Standard",
         jenisBingkai: form.jenisBingkai.value,
-        catatanKesihatan: form.catatanKesihatan.value,
-        snapshotBase64: capturedBase64
+        catatanKesihatan: "-",
+        snapshotBase64: snapBase64
       };
 
-      fetch(SCRIPT_URL, {
+      fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
@@ -451,21 +313,22 @@
       })
       .then(() => {
         btn.disabled = false;
-        btn.innerHTML = `<span>Simpan Rekod ke Google Sheet</span> <i class="fa-solid fa-cloud-arrow-up"></i>`;
-        alertBox.className = "mt-3 p-3 rounded-xl text-xs font-medium bg-emerald-950 border border-emerald-700 text-emerald-200";
-        alertBox.innerHTML = `<i class="fa-solid fa-circle-check mr-1 text-emerald-400"></i> Rekod berjaya dihantar ke Google Sheet!`;
+        btn.textContent = "Simpan ke Google Sheet";
+        msgBox.className = "mb-3 p-3 rounded-xl text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800";
+        msgBox.textContent = "Rekod dan foto berjaya disimpan ke Google Sheet!";
         form.reset();
-        document.getElementById('tarikhPeriksa').valueAsDate = new Date();
-        resetSnap();
-        selectGlasses('aviator');
+        document.getElementById('previewCard').classList.add('hidden');
+        snapBase64 = null;
       })
       .catch(err => {
         btn.disabled = false;
-        btn.innerHTML = `<span>Simpan Rekod ke Google Sheet</span> <i class="fa-solid fa-cloud-arrow-up"></i>`;
-        alertBox.className = "mt-3 p-3 rounded-xl text-xs font-medium bg-rose-950 border border-rose-700 text-rose-200";
-        alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1 text-rose-400"></i> Ralat: ${err.message}`;
+        btn.textContent = "Simpan ke Google Sheet";
+        msgBox.className = "mb-3 p-3 rounded-xl text-xs font-semibold bg-rose-950 text-rose-300 border border-rose-800";
+        msgBox.textContent = "Ralat: " + err.message;
       });
     }
+
+    window.onload = startCamera;
   </script>
 </body>
 </html>
